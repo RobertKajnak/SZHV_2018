@@ -5,7 +5,7 @@
 #include <string.h>
 #include "prep.h"
 
-///SECTION dictionary
+///SECTION dictionary -----------------------------------------
 typedef struct {
     char ** words;
     int wordcount;
@@ -19,16 +19,22 @@ void next_candidate(dictionary * dict, char * word);
 char ** get_words(char * file_name, int* wordcount);
 
 
-///SECTION hash and username data
-typedef struct {
-    char * pwd;
+///SECTION hash and username data -------------------------------
+struct user;
+typedef struct{
+    struct user * next_user; ///For the hash table
     char * uname;
     char * hash;
 } user;
+int cusers;
+user ** users;
+///loads the users and hashes from the shadow file
+void users_read(char* shadow_filename, int* user_count);
 
-user * get_users(char* shadow_filename, int* user_count);
+void user_remove(char * hash,char * password);
 
 
+///SECTION Misc --------------------------------------------------
 ///Expects a file pointer to the sadow file. File is assumed to be well-formatted
 char* getSalt(FILE * file);
 
@@ -46,8 +52,9 @@ int main(int argc, char ** argv)
     char ** words = get_words("dictionary.txt",&wordcount);
     ///TODO: add each individual character to the dictionary
 
+    ///add usernames and passwords
     int user_count=0;
-    user* users = get_users("training-shadow.txt",&user_count);
+    users_read("training-shadow.txt",&user_count);
 
     /// ----- Multi-threaded should start here -------
     //Two threads calculate the hashes, while the rest of the threads check if
@@ -55,7 +62,10 @@ int main(int argc, char ** argv)
     dictionary *dict = initDict(words,wordcount,4);
 
     int i;
-    for (i=0;i<user_count;i++)
+
+    user_remove(".g5JI3K8smZB6UyE2Yh.0.","iloveyou");
+    user_remove("fuh1gr5LdC7A22gzsAjHn1","mle199");
+    /*for (i=0;i<user_count;i++)
     {
         if (users[i].pwd==NULL){
             while (dict.words[0][0]!='\0')
@@ -64,7 +74,7 @@ int main(int argc, char ** argv)
             }
         }
 
-    }
+    }*/
     /*f = fopen("guesses.txt","w");
 
 
@@ -103,18 +113,19 @@ dictionary* initDict(char ** words, int wordcount, int width)
 
 void next_candidate(dictionary * dict, char * word)
 {
-    iterators[0]++;
+    dict->iterators[0]++;
     int i=0;
     //go through iterators, add them to the word count;
-    while (iterators[i]>=dict->wordcount)
+    while (dict->iterators[i]>=dict->wordcount)
     {
-        iterators[i]=0;
-        if (i<width-1){
-            iterator[i+1]++;
+        dict->iterators[i]=0;
+        if (i<dict->width-1){
+            dict->iterators[i+1]++;
         }
         i++;
     }
-    word = strcpy(sour);
+    ///TODO: continue here
+    //word = strcpy(sour);
 
 }
 
@@ -149,26 +160,82 @@ char ** get_words(char * file_name,int * wordcount)
     return word_list;
 }
 
-user * get_users(char* shfn, int * user_count)
+
+void user_insert(user * usr)
+{
+    unsigned long idx= (usr->hash[0]<<24) + (usr->hash[1]<<16)+(usr->hash[2]<<8)+usr->hash[3]+13372;
+    //memccpy(&idx,usr->hash,4,1); /// faster than shifting
+    user **slot = &users[idx%cusers];
+    if (*slot == NULL) ///calloc used, this should be fine
+    {
+        *slot = usr;
+        return;
+    }
+
+    ///if first bucket empty, go through the list
+    while ((*slot)->next_user != NULL)
+    {
+        slot = (user**)&((*slot)->next_user);
+    }
+    (*slot)->next_user = (struct user*)usr;
+}
+
+void user_remove(char * hash,char * password)
+{
+    unsigned long idx = (hash[0]<<24) + (hash[1]<<16)+(hash[2]<<8)+hash[3]+13372;
+    //memccpy(&idx,hash,4,1); /// faster than shifting
+    user **slot = &users[idx%cusers];
+    user **prev;
+    while (*slot!=NULL)
+    {
+        if (strcmp((*slot)->hash,hash) == 0)
+        {
+            printf("%s:%s\n",(*slot)->uname,password);
+            fflush(stdout); ///TODO -change to file
+            ///TODO fix memory leak
+            //prev = slot;
+            *slot = (user*)((*slot)->next_user);
+            //free(*prev);
+        }
+        else
+        {
+            slot=(user**)&((*slot)->next_user);
+        }
+
+
+    }
+}
+
+///Since we have the hashes already, the easiest way is probably a hash table
+///with chaining. Open addressing may be faster for this load in general, but
+///given that multiple users can have the same password and they are ought to be
+///removed when found, IMO a (separate) chaining apporach is better here
+
+///Also, optimal load factor should be around log(2)=~0.7, but since space is not an issue
+///anyway, 8+32byte for the content and 12 for the pointers, usage will be lower than 1MB even with
+///0.3-0.4 load factor, so I'll go with 3*expected entry size, even if I'm wasting 400kB of RAM.
+///I don't have the space shuttle's limitations :P
+void users_read(char* shfn, int * user_count)
 {
     FILE* f = fopen(shfn,"r");
 
     ///since both testing and training were ~8100, I am going to assume a starting value of 10k
-    ///but dynamic expansion is incuded, just in case
-    int cusers = 10000;
-    user* users = malloc(cusers * sizeof(user));
+    cusers = 30013;
 
-    // lcd418:$1$1G$.g5JI3K8smZB6UyE2Yh.0.:17427::::::
-
+    users = calloc(cusers, sizeof(user*));
+    user* user;
     int sz=1,i;
     for (i=0;sz>0;i++)
     {
-        users[i].uname = malloc(9*sizeof(char));
-        users[i].hash = malloc(33 * sizeof(char));
-        users[i].pwd = NULL;
-        sz = fscanf(f,"%[^:]:$%*[^$]$%*[^$]$%[^:]%*[^\n]\n",users[i].uname,users[i].hash);
+        user = malloc(sizeof(user));
+        user->uname = malloc(9*sizeof(char));
+        user->hash = malloc(33 * sizeof(char));
+        user->next_user = NULL;
 
-        if (i==cusers-1)
+        sz = fscanf(f,"%[^:]:$%*[^$]$%*[^$]$%[^:]%*[^\n]\n",user->uname,user->hash);
+        user_insert(user);
+        //changed to hash table, no longer needed
+        /*if (i==cusers-1)
         {
             user * new_arr = malloc((cusers*2)*sizeof(user));
             memcpy(new_arr,users,cusers * sizeof(user));
@@ -176,9 +243,9 @@ user * get_users(char* shfn, int * user_count)
             users = new_arr;
             free(temp);
             cusers *=2;
-        }
+        }*/
     }
     *user_count = i;
     fclose(f);
-    return users;
+    //return users;
 }
