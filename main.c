@@ -4,6 +4,10 @@
 #include <crypt.h>
 #include <string.h>
 #include "prep.h"
+#include <pthread.h>
+#include <unistd.h>
+#include <sys/types.h>
+
 
 ///SECTION dictionary -----------------------------------------
 typedef struct {
@@ -38,6 +42,21 @@ void user_remove(char * hash,char * password);
 ///Expects a file pointer to the sadow file. File is assumed to be well-formatted
 char* getSalt(FILE * file);
 
+FILE * guesses_output_file;
+
+///SECTION Multithread --------------------------------------------
+///Prototype for going through the dictionary and testing the hashes
+typedef struct{
+    int start;
+    int end;
+    char ** words;
+    int wordcount;
+    char * salt;
+} limits;
+void *guess(void * lims);
+
+pthread_mutex_t mutex_print;
+
 int main(int argc, char ** argv)
 {
     //buildDict_fromTop250("dictionary/top250.txt","dictionary.txt");
@@ -47,85 +66,106 @@ int main(int argc, char ** argv)
     ///obtain salt
     char * salt = getSalt(f);
     printf("%s\n\n",salt);
+    fclose(f);
 
     ///create the dictionary
     int wordcount;
     char ** words = get_words("dictionary.txt",&wordcount);
     ///TODO: add each individual character to the dictionary
-
+    ///Password types
+    /*
+        1. single words
+        2. single word with random capitalization
+        3. single word with random letter replacement
+        4. 2 words stuck together
+        5.
+    */
     ///add usernames and passwords
     int user_count=0;
     users_read("training-shadow.txt",&user_count);
 
-    /// ----- Multi-threaded should start here -------
-    //Two threads calculate the hashes, while the rest of the threads check if
-    //there is a match in the users. If the first two finish, they start going backwards
-    dictionary *dict = initDict(words,wordcount,3);
+    ///TODO: switch this back to stdout;
+    guesses_output_file = fopen("guesses.txt","w");
 
-    long i=0;
+    /// ----- Multi-threaded should start here -------
+    ///Threadless time:103-114s; 777 Guesses
+    ///Threaded time: 13s; 771 Guesses
+
+    printf("Wordcount = %d\n",wordcount);
+    //Single thread version:
+    dictionary *dict = initDict(words,wordcount,2);
+
     char word [100];
 
     struct crypt_data data;
     data.initialized = 0;
 
     next_candidate(dict,word);
+    int i=0;
     while (word[0]!='\0')
     {
-        //printf("Next Word = %s\n",word);
-        //i++;
-        //if (i==-1)
-        //{
-            char *enc = crypt_r(word, salt, &data);
-            ///this is the point where I read, that we are guaranteed that the salt length is 2
-            user_remove(enc+6,word);
-
-            //printf("%s\n",(enc+6));
-        //}
-
+        i++;
+        char *enc = crypt_r(word, salt, &data);
+        ///this is the point where I read, that we are guaranteed that the salt length is 2
+        user_remove(enc+6,word);
         next_candidate(dict,word);
     }
-    //printf("%d\n",i);
-    //user_remove(".g5JI3K8smZB6UyE2Yh.0.","iloveyou");
-    //user_remove("fuh1gr5LdC7A22gzsAjHn1","somethingsomething");
+    printf("Words Attempted(single Thread) :%d\n",i);
 
 
+    //pthread_mutex_t mutex; ///TODO figure this out
+    pthread_mutexattr_t mattr_print;
+    pthread_mutexattr_init(&mattr_print);
+    pthread_mutex_init(&mutex_print,&mattr_print);
 
-//fyl302:$1$1G$PRlP5ObnyT61Jrli9gJaQ0:17384::::::
+    ///We know we have 8 threads, so I'll keep it simple this time
+    pthread_t thread_id[8];
+    pthread_attr_t thread_attr[8];
 
-
-    /*for (i=0;i<user_count;i++)
+    //int i;
+    int prev_end=0;
+    for (i=0;i<8;i++)
     {
-        if (users[i].pwd==NULL){
-            while (dict.words[0][0]!='\0')
-            {
+        pthread_attr_init(&thread_attr[i]);
+        limits *lims = malloc(sizeof(limits));
+        lims->start = prev_end;
+        prev_end = (i+1)*wordcount/8;
+        lims->end = prev_end;
+        lims->words = words;
+        lims->wordcount = wordcount;
+        lims->salt = salt;
+        pthread_create(&thread_id[i],&thread_attr[i],guess,(void*)lims);
+        pthread_join(thread_id[i],NULL);//the main fuction waits for the threads
+    }
 
-            }
-        }
+    return 0;
+}
 
-    }*/
-    /*f = fopen("guesses.txt","w");
+void* guess(void* lims_vp)
+{
+    limits *lims = (limits*)lims_vp;
+    dictionary *dict = initDict(&(lims->words)[lims->start],lims->end-lims->start,2);
 
+    char word [100];
 
-    //fclose(f);
     struct crypt_data data;
     data.initialized = 0;
 
-//    char *enc = crypt_r(key, salt, &data);
-   // printf("EncryptedL %s\n", enc);dddddddddddd
-
-    char pwd[] = "permissionproofreading";
-    char shadow [] =".g5JI3K8smZB6UyE2Yh.0.";
-    //printf(gnu_get_libc_version ());
-    printf("%s\n%s\n%s",pwd,shadow,crypt("iloveyou","$1$M9$"));
-    for (i=0;i<4096;i++)
+    next_candidate(dict,word);
+    long i=0;
+    while (word[0]!='\0')
     {
-        if (strcmp(crypt(pwd,salts[i]),shadow)==0){
-            printf("%d",i);
-        }
+        i++;
+        char *enc = crypt_r(word, lims->salt, &data);
+        ///this is the point where I read, that we are guaranteed that the salt length is 2
+        user_remove(enc+6,word);
+        next_candidate(dict,word);
     }
+    pthread_mutex_lock(&mutex_print);
+    printf("Words Attempted :%d\n",i);
+    pthread_mutex_unlock(&mutex_print);
 
-    fclose(f);*/
-    return 0;
+    return NULL;
 }
 
 
@@ -255,8 +295,10 @@ void user_remove(char * hash,char * password)
     {
         if (strcmp((*slot)->hash,hash) == 0)
         {
-            printf("%s:%s\n",(*slot)->uname,password);
-            fflush(stdout); ///TODO -change to file
+            pthread_mutex_lock(&mutex_print);
+            fprintf(guesses_output_file ,"%s:%s\n",(*slot)->uname,password);
+            fflush(guesses_output_file); ///TODO -change back
+            pthread_mutex_unlock(&mutex_print);
             ///TODO fix memory leak
             //prev = slot;
             *slot = (user*)((*slot)->next_user);
