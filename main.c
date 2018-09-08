@@ -60,32 +60,33 @@ int main(int argc, char ** argv)
     /// ----- Multi-threaded should start here -------
     //Two threads calculate the hashes, while the rest of the threads check if
     //there is a match in the users. If the first two finish, they start going backwards
-    dictionary *dict = initDict(words,wordcount,4);
+    dictionary *dict = initDict(words,wordcount,3);
 
-    int i;
+    long i=0;
     char word [100];
-    for (i=0;i<703;i++)
+
+    struct crypt_data data;
+    data.initialized = 0;
+
+    next_candidate(dict,word);
+    while (word[0]!='\0')
     {
-        next_candidate(dict,word);
-        if(i>4 && i<700)
-            continue;
-        printf("Next Word = %s\n",word);
-
-        if (i==0)
-        {
-            struct crypt_data data;
-            data.initialized = 0;
-            char key [33];
-
+        //printf("Next Word = %s\n",word);
+        //i++;
+        //if (i==-1)
+        //{
             char *enc = crypt_r(word, salt, &data);
+            ///this is the point where I read, that we are guaranteed that the salt length is 2
+            user_remove(enc+6,word);
 
-            printf("%s\n",enc);
-        }
+            //printf("%s\n",(enc+6));
+        //}
 
+        next_candidate(dict,word);
     }
-
-    user_remove(".g5JI3K8smZB6UyE2Yh.0.","iloveyou");
-    user_remove("fuh1gr5LdC7A22gzsAjHn1","somethingsomething");
+    //printf("%d\n",i);
+    //user_remove(".g5JI3K8smZB6UyE2Yh.0.","iloveyou");
+    //user_remove("fuh1gr5LdC7A22gzsAjHn1","somethingsomething");
 
 
 
@@ -143,7 +144,7 @@ void next_candidate(dictionary * dict, char * word)
     dict->iterators[0]++;
     int i=0;
     //go through iterators, add them to the word count;
-    while (dict->iterators[i]>=dict->wordcount)
+    while (i<dict->width && dict->iterators[i]>=dict->wordcount)
     {
         dict->iterators[i]=0;
         if (i<dict->width-1){
@@ -152,11 +153,10 @@ void next_candidate(dictionary * dict, char * word)
         i++;
     }
 
-    for (i=dict->width-1;dict->iterators[i]!=0;i--)
+    for (i=dict->width-1;i>0;i--)
     {
-        if (i<0)
-            break;
-        if (dict->iterators[i-1] == 0)
+
+        if (dict->iterators[i]!=0 && dict->iterators[i-1] == 0)
         {
             dict->iterators[i-1]++;
         }
@@ -167,7 +167,14 @@ void next_candidate(dictionary * dict, char * word)
     for (i=0;i<dict->width;i++)
     {
         if (dict->iterators[i]==0)
+        {
+            if (i==0)
+            {
+                word[0]='\0';
+            }
             break;
+        }
+
 
         ///TODO: create a function that does both in a single pass
         strcpy((word+offset),(dict->words)[dict->iterators[i]]);
