@@ -46,6 +46,7 @@ int main(int argc, char ** argv)
     FILE *f = fopen(filename_shadow,"r");
     ///obtain salt
     char * salt = getSalt(f);
+    printf("%s\n\n",salt);
 
     ///create the dictionary
     int wordcount;
@@ -70,12 +71,27 @@ int main(int argc, char ** argv)
             continue;
         printf("Next Word = %s\n",word);
 
+        if (i==0)
+        {
+            struct crypt_data data;
+            data.initialized = 0;
+            char key [33];
+
+            char *enc = crypt_r(word, salt, &data);
+
+            printf("%s\n",enc);
+        }
+
     }
-
-
 
     user_remove(".g5JI3K8smZB6UyE2Yh.0.","iloveyou");
     user_remove("fuh1gr5LdC7A22gzsAjHn1","somethingsomething");
+
+
+
+//fyl302:$1$1G$PRlP5ObnyT61Jrli9gJaQ0:17384::::::
+
+
     /*for (i=0;i<user_count;i++)
     {
         if (users[i].pwd==NULL){
@@ -105,9 +121,9 @@ int main(int argc, char ** argv)
         if (strcmp(crypt(pwd,salts[i]),shadow)==0){
             printf("%d",i);
         }
-    }*/
+    }
 
-    fclose(f);
+    fclose(f);*/
     return 0;
 }
 
@@ -166,7 +182,15 @@ void next_candidate(dictionary * dict, char * word)
 char* getSalt(FILE * file)
 {
     char * salt = malloc(16*sizeof(char));
-    fscanf(file,"%*[^$]%*c%*[^$]%*c%[^$]",salt);
+    //fscanf(file,"%*[^$]%*c%*[^$]%*c%[^$]",salt);
+    salt[0] = '$';
+    fscanf(file,"%*[^$]$%[^$]$",(salt+1));
+    int offset = strlen(salt);
+    salt[offset]='$';
+    fscanf(file,"%[^$]",(salt+offset+1));
+    offset = strlen(salt);
+    salt[offset+1]='\0';
+    salt[offset]='$';
     rewind(file);
     return salt;
 }
