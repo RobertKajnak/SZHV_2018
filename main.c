@@ -62,9 +62,20 @@ int main(int argc, char ** argv)
     dictionary *dict = initDict(words,wordcount,4);
 
     int i;
+    char word [100];
+    for (i=0;i<703;i++)
+    {
+        next_candidate(dict,word);
+        if(i>4 && i<700)
+            continue;
+        printf("Next Word = %s\n",word);
+
+    }
+
+
 
     user_remove(".g5JI3K8smZB6UyE2Yh.0.","iloveyou");
-    user_remove("fuh1gr5LdC7A22gzsAjHn1","mle199");
+    user_remove("fuh1gr5LdC7A22gzsAjHn1","somethingsomething");
     /*for (i=0;i<user_count;i++)
     {
         if (users[i].pwd==NULL){
@@ -124,6 +135,29 @@ void next_candidate(dictionary * dict, char * word)
         }
         i++;
     }
+
+    for (i=dict->width-1;dict->iterators[i]!=0;i--)
+    {
+        if (i<0)
+            break;
+        if (dict->iterators[i-1] == 0)
+        {
+            dict->iterators[i-1]++;
+        }
+
+    }
+
+    int offset=0;
+    for (i=0;i<dict->width;i++)
+    {
+        if (dict->iterators[i]==0)
+            break;
+
+        ///TODO: create a function that does both in a single pass
+        strcpy((word+offset),(dict->words)[dict->iterators[i]]);
+        offset = strlen(word);
+
+    }
     ///TODO: continue here
     //word = strcpy(sour);
 
@@ -182,10 +216,10 @@ void user_insert(user * usr)
 
 void user_remove(char * hash,char * password)
 {
-    unsigned long idx = (hash[0]<<24) + (hash[1]<<16)+(hash[2]<<8)+hash[3]+13372;
+    unsigned long idx = (hash[0]<<24) + (hash[1]<<16)+(hash[2]<<8)+hash[3]+13372; ///TODO:remove this addition
     //memccpy(&idx,hash,4,1); /// faster than shifting
     user **slot = &users[idx%cusers];
-    user **prev;
+    //user **prev;
     while (*slot!=NULL)
     {
         if (strcmp((*slot)->hash,hash) == 0)
