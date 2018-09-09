@@ -53,13 +53,18 @@ const int THREADCOUNT = 8;
 
 typedef struct{
     int ind;
-    char ** words;
-    int wordcount;
+    int dictcount;
+    char *** words;
+    int *wordcounts;
+    int *widths;
     char * salt;
 } limits; ///Yes, it is now technically all the thread parameters. I'm not renaming it
+limits* limits_init(int ind, int dictcount,char***words, int* wordcounts, int* widths, char* salt);
+
 void *guess(void * lims);
 
 pthread_mutex_t mutex_print, mutex_thread_init;
+pthread_mutexattr_t mattr_print, mattr_thread_init;
 void printf_r(const char*format, ...);
 void fprintf_r(FILE *f,const char*format, ...);
 
@@ -74,9 +79,12 @@ int main(int argc, char ** argv)
     //printf("%s\n\n",salt);
     fclose(f);
 
-    ///create the dictionary
-    int wordcount;
-    char ** words = get_words("dictionary.txt",&wordcount);
+    ///create the dictionaries
+    int dictcount = 1;
+    char *** words = malloc(dictcount * sizeof (char**));
+    int *widths = malloc(dictcount*sizeof(int));
+    int *wordcounts = malloc (dictcount*sizeof(int));
+
     ///TODO: add each individual character to the dictionary
     ///Password types
     /*
@@ -86,6 +94,9 @@ int main(int argc, char ** argv)
         4. 2 words stuck together
         5.
     */
+    widths[0]=2;
+    words[0]= get_words("dictionary.txt",&(wordcounts[0]));
+
     ///add usernames and passwords
     int user_count=0;
     users_read("training-shadow.txt",&user_count);
@@ -120,9 +131,11 @@ int main(int argc, char ** argv)
 
 
     //pthread_mutex_t mutex; ///TODO figure this out
-    pthread_mutexattr_t mattr_print;
     pthread_mutexattr_init(&mattr_print);
     pthread_mutex_init(&mutex_print,&mattr_print);
+
+    pthread_mutexattr_init(&mattr_thread_init);
+    pthread_mutex_init(&mutex_thread_init,&mattr_thread_init);
 
     pthread_t thread_id[THREADCOUNT];
     pthread_attr_t thread_attr[THREADCOUNT];
@@ -131,11 +144,7 @@ int main(int argc, char ** argv)
     for (i=0;i<THREADCOUNT;i++)
     {
         pthread_attr_init(&thread_attr[i]);
-        limits *lims = malloc(sizeof(limits));
-        lims->ind = i;
-        lims->words = words;
-        lims->wordcount = wordcount;
-        lims->salt = salt;
+        limits *lims = limits_init(i,dictcount,words,wordcounts,widths,salt);
         pthread_create(&thread_id[i],&thread_attr[i],guess,(void*)lims);
     }
 
@@ -150,31 +159,34 @@ void* guess(void* lims_vp)
 {
     limits *lims = (limits*)lims_vp;
     int ind = lims->ind;
-    int start = ind*lims->wordcount/THREADCOUNT;
-    int end = (ind+1)*lims->wordcount/THREADCOUNT;
-    pthread_mutex_lock(&mutex_thread_init);
-    dictionary *dict = initDict(lims->words,lims->wordcount,2,start,end);
-    pthread_mutex_unlock(&mutex_thread_init);
 
-    char word [100];
-
-    struct crypt_data data;
-    data.initialized = 0;
-
-    next_candidate(dict,word);
-    long i=0;
-    while (word[0]!='\0')
+    int dict_ind;
+    for (dict_ind=0;dict_ind<lims->dictcount;dict_ind++)
     {
-        i++;
-        char *enc = crypt_r(word, lims->salt, &data);
-        ///this is the point where I read, that we are guaranteed that the salt length is 2
-        user_remove(enc+6,word);
+        int start = ind*lims->wordcounts[dict_ind]/THREADCOUNT;
+        int end = (ind+1)*lims->wordcounts[dict_ind]/THREADCOUNT;
+
+        pthread_mutex_lock(&mutex_thread_init);
+        dictionary *dict = initDict(lims->words[dict_ind],lims->wordcounts[dict_ind],lims->widths[dict_ind],start,end);
+        pthread_mutex_unlock(&mutex_thread_init);
+
+        char word [100];
+
+        struct crypt_data data;
+        data.initialized = 0;
+
         next_candidate(dict,word);
+        long i=0;
+        while (word[0]!='\0')
+        {
+            i++;
+            char *enc = crypt_r(word, lims->salt, &data);
+            ///this is the point where I read, that we are guaranteed that the salt length is 2
+            user_remove(enc+6,word);
+            next_candidate(dict,word);
+        }
+        printf_r("Words Attempted :%ld\n",i);
     }
-    printf_r("Words Attempted :%ld\n",i);
-    /*pthread_mutex_lock(&mutex_print);
-    printf("Words Attempted :%ld\n",i);
-    pthread_mutex_unlock(&mutex_print);*/
 
     return NULL;
 }
@@ -195,6 +207,8 @@ dictionary* initDict_all(char ** words, int wordcount, int width)
 {
     return initDict(words,wordcount,width,0,wordcount);
 }
+
+
 
 void next_candidate(dictionary * dict, char * word)
 {
@@ -369,6 +383,18 @@ void users_read(char* shfn, int * user_count)
     //return users;
 }
 
+limits *limits_init(int ind, int dictcount,char***words, int* wordcounts, int* widths, char* salt)
+{
+    limits *lims = malloc(sizeof(limits));
+    lims->ind = ind;
+    lims->words = words;
+    lims->wordcounts = wordcounts;
+    lims->widths = widths;
+    lims->dictcount = dictcount;
+    lims->salt = salt;
+    return lims;
+}
+
 void fprintf_r(FILE *f,const char*format, ...)
 {
     va_list args;
@@ -386,6 +412,7 @@ void printf_r(const char*format, ...)
     va_start(args,format);
     pthread_mutex_lock(&mutex_print);
     vprintf(format, args);
+    fflush_unlocked(stdout);
     pthread_mutex_unlock(&mutex_print);
     va_end(args);
 }
