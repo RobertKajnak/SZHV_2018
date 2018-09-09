@@ -31,9 +31,11 @@ char ** get_words(char * file_name, int* wordcount);
 ///SECTION hash and username data -------------------------------
 struct user;
 typedef struct{
+    char * hash;
     struct user * next_user; ///For the hash table
     char * uname;
-    char * hash;
+    //pthread_mutex_t mutex;
+    //pthread_mutexattr_t mattr;
 } user;
 int cusers;
 user ** users;
@@ -65,8 +67,8 @@ limits* limits_init(int ind, int dictcount,char***words, int* wordcounts, int* w
 
 void *guess(void * lims);
 
-pthread_mutex_t mutex_print, mutex_thread_init;
-pthread_mutexattr_t mattr_print, mattr_thread_init;
+pthread_mutex_t mutex_print, mutex_thread_init, mutex_user_remove;
+pthread_mutexattr_t mattr_print, mattr_thread_init, mattr_user_remove;
 void printf_r(const char*format, ...);
 void fprintf_r(FILE *f,const char*format, ...);
 
@@ -98,7 +100,7 @@ int main(int argc, char ** argv)
         5. 2 words stuck together
         6. words from training and test
     */
-    widths[0]=3;
+    widths[0]=1;
     words[0]= get_words("dictionary_top250.txt",&(wordcounts[0]));
 
     ///add usernames and passwords
@@ -140,6 +142,9 @@ int main(int argc, char ** argv)
 
     pthread_mutexattr_init(&mattr_thread_init);
     pthread_mutex_init(&mutex_thread_init,&mattr_thread_init);
+
+    pthread_mutexattr_init(&mattr_user_remove);
+    pthread_mutex_init(&mutex_user_remove,&mattr_user_remove);
 
     pthread_t thread_id[THREADCOUNT];
     pthread_attr_t thread_attr[THREADCOUNT];
@@ -200,11 +205,8 @@ dictionary* initDict(char ** words, int wordcount, int width, int start_section,
     dictionary *dict = malloc(sizeof(dictionary));
     dict->words = words;
     dict->width = width;
-    //if (width>1)
-        dict->end_word = end_section>wordcount?wordcount:end_section;
-    //else
-     //   dict->wordcount = end_section-start_section;
-    dict->wordcount = wordcount;
+    dict->end_word = end_section>wordcount?wordcount:end_section;
+    dict->wordcount = width==1?end_section:wordcount;
     dict->iterators = calloc(width, sizeof(int));
     dict->iterators[width-1] = start_section;
     return dict;
@@ -335,9 +337,16 @@ void user_remove(char * hash,char * password)
     //user **prev;
     while (*slot!=NULL)
     {
+        pthread_mutex_lock(&mutex_user_remove);
+        if (*slot==NULL)
+        {
+            pthread_mutex_unlock(&mutex_user_remove);
+            return;
+        }
+
+
         if (strcmp((*slot)->hash,hash) == 0)
         {
-
             fprintf_r(guesses_output_file ,"%s:%s\n",(*slot)->uname,password);
             ///TODO fix memory leak
             //prev = slot;
@@ -349,7 +358,7 @@ void user_remove(char * hash,char * password)
             slot=(user**)&((*slot)->next_user);
         }
 
-
+        pthread_mutex_unlock(&mutex_user_remove);
     }
 }
 
@@ -378,6 +387,10 @@ void users_read(char* shfn, int * user_count)
         user->uname = malloc(9*sizeof(char));
         user->hash = malloc(33 * sizeof(char));
         user->next_user = NULL;
+        //user->mutex = malloc(sizeof(pthread_mutex_t)); ///this causes memory error for some reason
+        //user->mattr = malloc(sizeof(pthread_mutexattr_t));
+        //pthread_mutexattr_init(&user->mattr); ///either of the two
+        //pthread_mutex_init(&user->mutex,&user->mattr);
 
         sz = fscanf(f,"%[^:]:$%*[^$]$%*[^$]$%[^:]%*[^\n]\n",user->uname,user->hash);
         user_insert(user);
