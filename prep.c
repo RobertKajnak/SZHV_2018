@@ -3,12 +3,16 @@
 void toupper_a(char* char_arr);
 void tolower_a(char* char_arr);
 
-int _build_bruteforce(FILE* f, FILE* g);
+int _build_bruteforce(FILE* g);
 int _build_top250(FILE* f, FILE* g);
 
 void buildDict(char* source, char*dest, DICT_TYPE word_set)
 {
-    FILE *f = fopen(source ,"r");
+    FILE *f = NULL;
+    if (strcmp(source,"")!=0)
+    {
+         f= fopen(source ,"r");
+    }
     FILE *g = fopen(dest,"w");
 
     fprintf(g,"%s","     \n"); /// should in no case be greater than 100k
@@ -16,7 +20,7 @@ void buildDict(char* source, char*dest, DICT_TYPE word_set)
     switch (word_set)
     {
         case (BRUTEFORCE):
-            wc = _build_bruteforce(f,g);
+            wc = _build_bruteforce(g);
             break;
         case (TOP250):
             wc = _build_top250(f,g);
@@ -29,15 +33,40 @@ void buildDict(char* source, char*dest, DICT_TYPE word_set)
     rewind(g);
     fprintf(g,"%d",wc);
 
-
-    fclose(f);
+    if (f!=NULL)
+    {
+        fclose(f);
+    }
     fclose(g);
 
 }
 
-int _build_bruteforce(FILE* f, FILE* g)
+int _build_bruteforce(FILE* g)
 {
     int wc=0;
+
+    int i;
+
+    for (i='!';i<'~';i++)
+    {
+        if (i=='`')
+            continue;
+        fprintf(g,"2 %c\n",i);
+        wc++;
+
+    }
+    /*for (i='a';i<='z';i++)
+        fprintf("1 %c\n",i);
+    wc += 'z'-'a';
+
+    for (i='A';i<='Z';i++)
+        fprintf("1 %c\n",i);
+    wc += 'Z' - 'A';
+
+    for (i='9';i<='0';i++)
+        fprintf("1 %c\n",i);
+    wc += '9' - '0';*/
+
 
     return wc;
 }
