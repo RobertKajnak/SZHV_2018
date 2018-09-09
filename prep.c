@@ -3,7 +3,64 @@
 void toupper_a(char* char_arr);
 void tolower_a(char* char_arr);
 
-void buildDict_fromTop250(char* source, char* dest)
+int _build_bruteforce(FILE* f, FILE* g);
+int _build_top250(FILE* f, FILE* g);
+
+void buildDict(char* source, char*dest, DICT_TYPE word_set)
+{
+    FILE *f = fopen(source ,"r");
+    FILE *g = fopen(dest,"w");
+
+    fprintf(g,"%s","     \n"); /// should in no case be greater than 100k
+    int wc=0;
+    switch (word_set)
+    {
+        case (BRUTEFORCE):
+            wc = _build_bruteforce(f,g);
+            break;
+        case (TOP250):
+            wc = _build_top250(f,g);
+            break;
+        default:
+            printf("Unexpected Error Occured.");
+            break;
+    }
+
+    rewind(g);
+    fprintf(g,"%d",wc);
+
+
+    fclose(f);
+    fclose(g);
+
+}
+
+int _build_bruteforce(FILE* f, FILE* g)
+{
+    int wc=0;
+
+    return wc;
+}
+
+
+int _build_top250(FILE* f, FILE* g)
+{
+    int wc=0;
+    char * word  = malloc(100*sizeof(char));
+
+    int size=fscanf(f,"%*d\t%*f\t%*d\t%s",word);
+    while (size>0)
+    {
+        ///write the read word
+        fprintf(g,"%d %s\n",(int)strlen(word)+1,word);
+        wc++;
+        size=fscanf(f,"%*d\t%*f\t%*d\t%s",word);
+    }
+    return wc;
+
+}
+
+void buildDict_fromTop250_withCapitalization(char* source, char* dest)
 {
     ///Reading and writing separately would be faster on a HDD,
     ///but since I'm using an SSD and it's only preparatory anyway, it's shorter to code

@@ -3,11 +3,13 @@
 #include <stdlib.h>
 #include <crypt.h>
 #include <string.h>
-#include "prep.h"
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <stdarg.h>
+
+
+#include "prep.h"
 
 
 ///SECTION dictionary -----------------------------------------
@@ -70,7 +72,8 @@ void fprintf_r(FILE *f,const char*format, ...);
 
 int main(int argc, char ** argv)
 {
-    //buildDict_fromTop250("dictionary/top250.txt","dictionary.txt");
+    //buildDict("dictionary/top250.txt","dictionary_top250.txt",TOP250);
+    //return;
 
     char * filename_shadow = "training-shadow.txt";
     FILE *f = fopen(filename_shadow,"r");
@@ -88,14 +91,15 @@ int main(int argc, char ** argv)
     ///TODO: add each individual character to the dictionary
     ///Password types
     /*
-        1. single words
-        2. single word with random capitalization
-        3. single word with random letter replacement
-        4. 2 words stuck together
-        5.
+        1. Top 250 stuff   --- 735
+        2. single words
+        3. single word with random capitalization
+        4. single word with random letter replacement
+        5. 2 words stuck together
+        6. words from training and test
     */
-    widths[0]=2;
-    words[0]= get_words("dictionary.txt",&(wordcounts[0]));
+    widths[0]=3;
+    words[0]= get_words("dictionary_top250.txt",&(wordcounts[0]));
 
     ///add usernames and passwords
     int user_count=0;
@@ -185,7 +189,7 @@ void* guess(void* lims_vp)
             user_remove(enc+6,word);
             next_candidate(dict,word);
         }
-        printf_r("Words Attempted :%ld\n",i);
+        printf_r("Words Attempted using dictionary %d:%ld\n",dict_ind,i);
     }
 
     return NULL;
@@ -196,7 +200,10 @@ dictionary* initDict(char ** words, int wordcount, int width, int start_section,
     dictionary *dict = malloc(sizeof(dictionary));
     dict->words = words;
     dict->width = width;
-    dict->end_word = end_section>wordcount?wordcount:end_section;
+    //if (width>1)
+        dict->end_word = end_section>wordcount?wordcount:end_section;
+    //else
+     //   dict->wordcount = end_section-start_section;
     dict->wordcount = wordcount;
     dict->iterators = calloc(width, sizeof(int));
     dict->iterators[width-1] = start_section;
@@ -221,7 +228,7 @@ void next_candidate(dictionary * dict, char * word)
         if (i<dict->width-1)
         {
             dict->iterators[i+1]++;
-            if (dict->iterators[i+1]==dict->end_word)
+            if (dict->iterators[dict->width-1]==dict->end_word)
             {
                 word[0]='\0';
                 return;
@@ -232,12 +239,10 @@ void next_candidate(dictionary * dict, char * word)
 
     for (i=dict->width-1;i>0;i--)
     {
-
         if (dict->iterators[i]!=0 && dict->iterators[i-1] == 0)
         {
             dict->iterators[i-1]++;
         }
-
     }
 
     int offset=0;
