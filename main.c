@@ -45,7 +45,7 @@ void user_remove(char * hash,char * password);
 ///Expects a file pointer to the sadow file. File is assumed to be well-formatted
 char* getSalt(FILE * file);
 
-FILE * guesses_output_file;
+FILE * guesses_output_file;///TODO -change back
 
 ///SECTION Multithread --------------------------------------------
 ///Prototype for going through the dictionary and testing the hashes
@@ -66,6 +66,16 @@ void printf_r(const char*format, ...)
     va_start(args,format);
     pthread_mutex_lock(&mutex_print);
     vprintf(format, args);
+    pthread_mutex_unlock(&mutex_print);
+    va_end(args);
+}
+void fprintf_r(FILE *f,const char*format, ...)
+{
+    va_list args;
+    va_start(args,format);
+    pthread_mutex_lock(&mutex_print);
+    vfprintf(guesses_output_file,format, args);
+    fflush(f);
     pthread_mutex_unlock(&mutex_print);
     va_end(args);
 }
@@ -101,7 +111,7 @@ int main(int argc, char ** argv)
 
     /// ----- Multi-threaded should start here -------
     ///Threadless time:103-114s; 777 Guesses
-    ///Threaded time(4 threads): 53s; 777 Guesses
+    ///Threaded time(4 threads): ~30s; 777 Guesses
 
     //printf("Wordcount = %d\n",wordcount);
     //Single thread version:
@@ -324,10 +334,8 @@ void user_remove(char * hash,char * password)
     {
         if (strcmp((*slot)->hash,hash) == 0)
         {
-            pthread_mutex_lock(&mutex_print);
-            fprintf(guesses_output_file ,"%s:%s\n",(*slot)->uname,password);
-            fflush(guesses_output_file); ///TODO -change back
-            pthread_mutex_unlock(&mutex_print);
+
+            fprintf_r(guesses_output_file ,"%s:%s\n",(*slot)->uname,password);
             ///TODO fix memory leak
             //prev = slot;
             *slot = (user*)((*slot)->next_user);
