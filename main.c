@@ -22,7 +22,7 @@ typedef struct {
 }dictionary;
 
 dictionary* initDict_all(char ** words, int length, int width);//I forgot overloading was C++ only
-dictionary* initDict(char ** words, int wordcount, int width, int start_section, int end_section);
+dictionary* initDict(char ** words, int wordcount,  int width_max, int width_min, int start_section, int end_section);
 void next_candidate(dictionary * dict, char * word);
 
 char ** get_words(char * file_name, int* wordcount);
@@ -75,7 +75,8 @@ void fprintf_r(FILE *f,const char*format, ...);
 int main(int argc, char ** argv)
 {
     //buildDict("dictionary/top250.txt","dictionary_top250.txt",TOP250);
-    //return;
+    //buildDict("","dictionary_bruteforce.txt",BRUTEFORCE);
+    //return 0;
 
     char * filename_shadow = "training-shadow.txt";
     FILE *f = fopen(filename_shadow,"r");
@@ -100,8 +101,12 @@ int main(int argc, char ** argv)
         5. 2 words stuck together
         6. words from training and test
     */
-    widths[0]=1;
-    words[0]= get_words("dictionary_top250.txt",&(wordcounts[0]));
+    //widths[0]=2;
+    //words[0]= get_words("dictionary_top250.txt",&(wordcounts[0]));
+
+    widths[0]=2;
+    words[0] = get_words("dictionary_bruteforce.txt",&(wordcounts[0]));
+    ///TODO for bruteforce, make exception and start from 3 characters
 
     ///add usernames and passwords
     int user_count=0;
@@ -176,7 +181,7 @@ void* guess(void* lims_vp)
         int end = (ind+1)*lims->wordcounts[dict_ind]/THREADCOUNT;
 
         pthread_mutex_lock(&mutex_thread_init);
-        dictionary *dict = initDict(lims->words[dict_ind],lims->wordcounts[dict_ind],lims->widths[dict_ind],start,end);
+        dictionary *dict = initDict(lims->words[dict_ind],lims->wordcounts[dict_ind],lims->widths[dict_ind],0,start,end);
         pthread_mutex_unlock(&mutex_thread_init);
 
         char word [100];
@@ -200,21 +205,31 @@ void* guess(void* lims_vp)
     return NULL;
 }
 
-dictionary* initDict(char ** words, int wordcount, int width, int start_section, int end_section)
+
+dictionary* initDict(char ** words, int wordcount, int width_max, int width_min, int start_section, int end_section)
 {
     dictionary *dict = malloc(sizeof(dictionary));
     dict->words = words;
-    dict->width = width;
+    dict->width = width_max;
     dict->end_word = end_section>wordcount?wordcount:end_section;
-    dict->wordcount = width==1?end_section:wordcount;
-    dict->iterators = calloc(width, sizeof(int));
-    dict->iterators[width-1] = start_section;
+    dict->wordcount = width_max==1?end_section:wordcount;
+    dict->iterators = calloc(width_max, sizeof(int));
+
+    int i;
+    for (i=1;i<width_min;i++)
+    {
+            dict->iterators[i] = 1;
+    }
+
+    if (start_section!=0)
+        dict->iterators[width_max-1] = start_section;
+
     return dict;
 }
 
 dictionary* initDict_all(char ** words, int wordcount, int width)
 {
-    return initDict(words,wordcount,width,0,wordcount);
+    return initDict(words,wordcount,width,0,0,wordcount);
 }
 
 
@@ -265,8 +280,6 @@ void next_candidate(dictionary * dict, char * word)
         offset = strlen(word);
 
     }
-    ///TODO: continue here
-    //word = strcpy(sour);
 
 }
 
