@@ -60,25 +60,9 @@ typedef struct{
 void *guess(void * lims);
 
 pthread_mutex_t mutex_print, mutex_thread_init;
-void printf_r(const char*format, ...)
-{
-    va_list args;
-    va_start(args,format);
-    pthread_mutex_lock(&mutex_print);
-    vprintf(format, args);
-    pthread_mutex_unlock(&mutex_print);
-    va_end(args);
-}
-void fprintf_r(FILE *f,const char*format, ...)
-{
-    va_list args;
-    va_start(args,format);
-    pthread_mutex_lock(&mutex_print);
-    vfprintf(guesses_output_file,format, args);
-    fflush(f);
-    pthread_mutex_unlock(&mutex_print);
-    va_end(args);
-}
+void printf_r(const char*format, ...);
+void fprintf_r(FILE *f,const char*format, ...);
+
 int main(int argc, char ** argv)
 {
     //buildDict_fromTop250("dictionary/top250.txt","dictionary.txt");
@@ -111,7 +95,7 @@ int main(int argc, char ** argv)
 
     /// ----- Multi-threaded should start here -------
     ///Threadless time:103-114s; 777 Guesses
-    ///Threaded time(4 threads): ~30s; 777 Guesses
+    ///Threaded time(4 threads): 29s; 777 Guesses
 
     //printf("Wordcount = %d\n",wordcount);
     //Single thread version:
@@ -378,18 +362,30 @@ void users_read(char* shfn, int * user_count)
 
         sz = fscanf(f,"%[^:]:$%*[^$]$%*[^$]$%[^:]%*[^\n]\n",user->uname,user->hash);
         user_insert(user);
-        //changed to hash table, no longer needed
-        /*if (i==cusers-1)
-        {
-            user * new_arr = malloc((cusers*2)*sizeof(user));
-            memcpy(new_arr,users,cusers * sizeof(user));
-            user* temp = users;
-            users = new_arr;
-            free(temp);
-            cusers *=2;
-        }*/
+
     }
     *user_count = i;
     fclose(f);
     //return users;
+}
+
+void fprintf_r(FILE *f,const char*format, ...)
+{
+    va_list args;
+    va_start(args,format);
+    pthread_mutex_lock(&mutex_print);
+    vfprintf(guesses_output_file,format, args);
+    fflush_unlocked(f);
+    pthread_mutex_unlock(&mutex_print);
+    va_end(args);
+}
+
+void printf_r(const char*format, ...)
+{
+    va_list args;
+    va_start(args,format);
+    pthread_mutex_lock(&mutex_print);
+    vprintf(format, args);
+    pthread_mutex_unlock(&mutex_print);
+    va_end(args);
 }
