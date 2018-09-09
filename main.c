@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <stdarg.h>
 
 
 ///SECTION dictionary -----------------------------------------
@@ -15,9 +16,11 @@ typedef struct {
     int wordcount;
     int width;
     int * iterators;
+    int end_word;
 }dictionary;
 
-dictionary* initDict(char ** words, int length, int width);
+dictionary* initDict_all(char ** words, int length, int width);//I forgot overloading was C++ only
+dictionary* initDict(char ** words, int wordcount, int width, int start_section, int end_section);
 void next_candidate(dictionary * dict, char * word);
 
 char ** get_words(char * file_name, int* wordcount);
@@ -46,17 +49,26 @@ FILE * guesses_output_file;
 
 ///SECTION Multithread --------------------------------------------
 ///Prototype for going through the dictionary and testing the hashes
+const int THREADCOUNT = 8;
+
 typedef struct{
-    int start;
-    int end;
+    int ind;
     char ** words;
     int wordcount;
     char * salt;
-} limits;
+} limits; ///Yes, it is now technically all the thread parameters. I'm not renaming it
 void *guess(void * lims);
 
-pthread_mutex_t mutex_print;
-
+pthread_mutex_t mutex_print, mutex_thread_init;
+void printf_r(const char*format, ...)
+{
+    va_list args;
+    va_start(args,format);
+    pthread_mutex_lock(&mutex_print);
+    vprintf(format, args);
+    pthread_mutex_unlock(&mutex_print);
+    va_end(args);
+}
 int main(int argc, char ** argv)
 {
     //buildDict_fromTop250("dictionary/top250.txt","dictionary.txt");
@@ -65,7 +77,7 @@ int main(int argc, char ** argv)
     FILE *f = fopen(filename_shadow,"r");
     ///obtain salt
     char * salt = getSalt(f);
-    printf("%s\n\n",salt);
+    //printf("%s\n\n",salt);
     fclose(f);
 
     ///create the dictionary
@@ -89,11 +101,11 @@ int main(int argc, char ** argv)
 
     /// ----- Multi-threaded should start here -------
     ///Threadless time:103-114s; 777 Guesses
-    ///Threaded time: 13s; 771 Guesses
+    ///Threaded time(4 threads): 53s; 777 Guesses
 
-    printf("Wordcount = %d\n",wordcount);
+    //printf("Wordcount = %d\n",wordcount);
     //Single thread version:
-    dictionary *dict = initDict(words,wordcount,2);
+    /*dictionary *dict = initDict_all(words,wordcount,2);
 
     char word [100];
 
@@ -110,7 +122,7 @@ int main(int argc, char ** argv)
         user_remove(enc+6,word);
         next_candidate(dict,word);
     }
-    printf("Words Attempted(single Thread) :%d\n",i);
+    printf("Words Attempted(single Thread) :%d\n",i);*/
 
 
     //pthread_mutex_t mutex; ///TODO figure this out
@@ -118,23 +130,22 @@ int main(int argc, char ** argv)
     pthread_mutexattr_init(&mattr_print);
     pthread_mutex_init(&mutex_print,&mattr_print);
 
-    ///We know we have 8 threads, so I'll keep it simple this time
-    pthread_t thread_id[8];
-    pthread_attr_t thread_attr[8];
+    pthread_t thread_id[THREADCOUNT];
+    pthread_attr_t thread_attr[THREADCOUNT];
 
-    //int i;
-    int prev_end=0;
-    for (i=0;i<8;i++)
+    int i;
+    for (i=0;i<THREADCOUNT;i++)
     {
         pthread_attr_init(&thread_attr[i]);
         limits *lims = malloc(sizeof(limits));
-        lims->start = prev_end;
-        prev_end = (i+1)*wordcount/8;
-        lims->end = prev_end;
+        lims->ind = i;
         lims->words = words;
         lims->wordcount = wordcount;
         lims->salt = salt;
         pthread_create(&thread_id[i],&thread_attr[i],guess,(void*)lims);
+    }
+
+    for (i=0;i<THREADCOUNT;i++){
         pthread_join(thread_id[i],NULL);//the main fuction waits for the threads
     }
 
@@ -144,7 +155,12 @@ int main(int argc, char ** argv)
 void* guess(void* lims_vp)
 {
     limits *lims = (limits*)lims_vp;
-    dictionary *dict = initDict(&(lims->words)[lims->start],lims->end-lims->start,2);
+    int ind = lims->ind;
+    int start = ind*lims->wordcount/THREADCOUNT;
+    int end = (ind+1)*lims->wordcount/THREADCOUNT;
+    pthread_mutex_lock(&mutex_thread_init);
+    dictionary *dict = initDict(lims->words,lims->wordcount,2,start,end);
+    pthread_mutex_unlock(&mutex_thread_init);
 
     char word [100];
 
@@ -161,22 +177,29 @@ void* guess(void* lims_vp)
         user_remove(enc+6,word);
         next_candidate(dict,word);
     }
-    pthread_mutex_lock(&mutex_print);
-    printf("Words Attempted :%d\n",i);
-    pthread_mutex_unlock(&mutex_print);
+    printf_r("Words Attempted :%ld\n",i);
+    /*pthread_mutex_lock(&mutex_print);
+    printf("Words Attempted :%ld\n",i);
+    pthread_mutex_unlock(&mutex_print);*/
 
     return NULL;
 }
 
-
-dictionary* initDict(char ** words, int wordcount, int width)
+dictionary* initDict(char ** words, int wordcount, int width, int start_section, int end_section)
 {
     dictionary *dict = malloc(sizeof(dictionary));
     dict->words = words;
     dict->width = width;
+    dict->end_word = end_section>wordcount?wordcount:end_section;
     dict->wordcount = wordcount;
     dict->iterators = calloc(width, sizeof(int));
+    dict->iterators[width-1] = start_section;
     return dict;
+}
+
+dictionary* initDict_all(char ** words, int wordcount, int width)
+{
+    return initDict(words,wordcount,width,0,wordcount);
 }
 
 void next_candidate(dictionary * dict, char * word)
@@ -187,8 +210,14 @@ void next_candidate(dictionary * dict, char * word)
     while (i<dict->width && dict->iterators[i]>=dict->wordcount)
     {
         dict->iterators[i]=0;
-        if (i<dict->width-1){
+        if (i<dict->width-1)
+        {
             dict->iterators[i+1]++;
+            if (dict->iterators[i+1]==dict->end_word)
+            {
+                word[0]='\0';
+                return;
+            }
         }
         i++;
     }
