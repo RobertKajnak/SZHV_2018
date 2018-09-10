@@ -30,7 +30,7 @@ void buildDict(char* source, char*dest, DICT_TYPE word_set)
 
             break;
         case (COMPOUNDS):
-            _build_compounds(f,g);
+            wc = _build_compounds(f,g);
         default:
             printf("Unexpected Error Occured.");
             break;
@@ -136,19 +136,22 @@ void buildDictFromAll(char * output_file)
     fclose(g);
 }
 
-char ** get_words_2(FILE f,int * wordcount)
+///wordlengths initialized inside; don't  do it  beforehand
+char ** get_words_2(FILE *f,int * wordcount, int ** wordlengths)
 {
     int wc;
     fscanf(f,"%d", &wc);
     char ** word_list = malloc((++wc) * sizeof(char*));
+    *wordlengths = malloc(wc * sizeof(int));
     word_list[0] = '\0';
 
     int i;
     int cc,sc=sizeof(char);
-    for (i=1;i<wc;i++)
+    for (i=0;i<wc;i++)
     {
         fscanf(f,"%d", &cc);
         word_list[i] = malloc (cc*sc);
+        (*wordlengths)[i] = cc;
         fscanf(f,"%s",word_list[i]);
     }
 
@@ -159,9 +162,29 @@ char ** get_words_2(FILE f,int * wordcount)
 
 int _build_compounds(FILE* f, FILE* g)
 {
+    int wc = 0,newwc=0;
+    int *wcs;
+    char ** words = get_words_2(f, &wc, &wcs);
 
+    int i,j;
+    char newWord [100];
+    for (i=0;i<wc;i++)
+    {
 
-
+        for (j=0;j<wc;j++)
+        {
+            if (wcs[j]+wcs[i]==22)
+            {
+                strcat(newWord,words[i]);
+                strcat(newWord,words[j]);
+                tolower_a(newWord);
+                fprintf(g,"%d %s\n",22,newWord);
+                newWord[0]='\0';
+                newwc++;
+            }
+        }
+    }
+    return newwc;
 }
 
 void buildCombinationList(int len,char *out_name)
