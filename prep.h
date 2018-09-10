@@ -10,7 +10,8 @@ typedef enum
     BRUTEFORCE,
     TOP250,
     MOST_USED,
-    COMPOUNDS
+    COMPOUNDS,
+    MODS
 } DICT_TYPE;
 
 void buildDict(char * source, char * dest, DICT_TYPE dict_type);

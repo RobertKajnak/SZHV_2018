@@ -6,6 +6,7 @@ void tolower_a(char* char_arr);
 int _build_bruteforce(FILE* g);
 int _build_top250(FILE* f, FILE* g);
 int _build_compounds(FILE* f, FILE* g);
+int _build_mods(FILE *f,FILE*g);
 
 void buildDict(char* source, char*dest, DICT_TYPE word_set)
 {
@@ -16,7 +17,7 @@ void buildDict(char* source, char*dest, DICT_TYPE word_set)
     }
     FILE *g = fopen(dest,"w");
 
-    fprintf(g,"%s","     \n"); /// should in no case be greater than 100k
+    fprintf(g,"%s","      \n"); /// should in no case be greater than 100k
     int wc=0;
     switch (word_set)
     {
@@ -31,6 +32,10 @@ void buildDict(char* source, char*dest, DICT_TYPE word_set)
             break;
         case (COMPOUNDS):
             wc = _build_compounds(f,g);
+            break;
+        case (MODS):
+            wc = _build_mods(f,g);
+            break;
         default:
             printf("Unexpected Error Occured.");
             break;
@@ -71,7 +76,7 @@ char* remove_non_alhpa(char * a)
         return new_word;
 }
 
-void insert_word(char*word,char ** wlist,int * iter)
+void insert_word(char*word,char ** wlist, int * frequency,int * iter)
 {
     if (word==NULL)
         return;
@@ -79,11 +84,41 @@ void insert_word(char*word,char ** wlist,int * iter)
     for (i=0;i<=*iter;i++)
     {
         if (strcmp(word,wlist[i])==0)
+        {
+            frequency[i]++;
             return;
+        }
+
     }
     (*iter)++;
     wlist[*iter]=word;
+    frequency[*iter]++;
     return;
+}
+
+void sort_words(char ** wlist, int* frequency, int nr_words)
+{
+    int i,j;
+    //char swapped=0;
+    char* temp_c;
+    int temp_i;
+    for (i=0;i<nr_words-1;i++)
+    {
+
+        for (j=0; j<nr_words-1;j++)
+        {
+            if (frequency[j]<frequency[j+1])
+            {
+                temp_i = frequency[j];
+                frequency[j] = frequency[j+1];
+                frequency[j+1] = temp_i;
+
+                temp_c = wlist[j];
+                wlist[j] = wlist[j+1];
+                wlist[j+1]=temp_c;
+            }
+        }
+    }
 }
 
 void buildDictFromAll(char * output_file)
@@ -98,7 +133,7 @@ void buildDictFromAll(char * output_file)
                     "dictionary/gutenberg/Gullivers Travels.txt",
                     "dictionary/gutenberg/Pride and Prejudice.txt",
                     "dictionary/gutenberg/The Adventures of Sherlock Holmes.txt",
-                    "dictionary/gutenberg/The Divine Comedy.txt",
+                    //"dictionary/gutenberg/The Divine Comedy.txt",
                     "dictionary/gutenberg/The Kama Sutra of Vatsyayana.txt",
                     "dictionary/gutenberg/The Prince.txt"
                     };
@@ -106,21 +141,25 @@ void buildDictFromAll(char * output_file)
     FILE * f;
     char word[1000];
     char **word_list = malloc(500000*sizeof(char*));
+    int *frequency = malloc(500000*sizeof(int));
     int iter = -1;
     int wc =0;
-    for (i=0;i<10;i++)
+    for (i=0;i<9;i++)
     {
         f = fopen(file_names[i],"r");
         l=1;
         while (l>0)
         {
             l=fscanf(f,"%s",word);
-            insert_word(remove_non_alhpa(word),word_list,&iter);
+            tolower_a(word);
+            insert_word(remove_non_alhpa(word),word_list,frequency,&iter);
         }
 
         fclose(f);
         printf("Closed file %s\n",file_names[i]);
     }
+
+    sort_words(word_list,frequency,iter);
 
     int k;
     for (k=0;k<=iter;k++)
@@ -168,9 +207,13 @@ int _build_compounds(FILE* f, FILE* g)
 
     int i,j;
     char newWord [100];
+    printf("Total: %d\n",wc);
     for (i=0;i<wc;i++)
     {
-
+        if (i%1000==0)
+        {
+            printf("Current: %d\n",i);
+        }
         for (j=0;j<wc;j++)
         {
             if (wcs[j]+wcs[i]==22)
@@ -187,10 +230,81 @@ int _build_compounds(FILE* f, FILE* g)
     return newwc;
 }
 
-void buildCombinationList(int len,char *out_name)
+
+char* try_replace(char * source,char old_char, char * new_char)
 {
-    int wlist_len;
-    //char ** wlist = buildDictFromAll("")
+    if (strchr(source,old_char)==NULL)
+        return NULL;
+
+    int i,j=0,k;
+    char * newWord = malloc(100);
+
+    for (i=0;i<strlen(source);i++)
+    {
+        if (source[i]==old_char)
+        {
+            for (k=0;k<strlen(new_char);k++)
+            {
+                newWord[j++] = new_char[k];
+            }
+        }
+        else
+        {
+            newWord[j]=source[i];
+            j++;
+        }
+    }
+    newWord[j]='\0';
+    return newWord;
+}
+
+int _build_mods(FILE *f,FILE*g)
+{
+    int wc = 0,newwc=0;
+    int *wcs;
+    char ** words = get_words_2(f, &wc, &wcs);
+
+    int i,j,jmax=9;
+
+    char olds[]={'p','a','n','m','e','l','c','d','o'};
+    char *news[]={"|>","/\\","|\\|","/V\\","[-","|_","<","|)","()"};
+
+    char* newWord;
+    char *word;
+    for (i=0;i<wc;i++)
+    {
+        word= words[i];
+
+        for (j=0;j<jmax;j++)
+        {
+            newWord = try_replace(word,olds[j],news[j]);
+
+            if (newWord!=NULL)
+            {
+                fprintf(g,"%d %s\n",(int)strlen(newWord),newWord);
+                newwc++;
+            }
+        }
+
+        newWord = malloc(100);
+        strcpy(newWord,word);
+        toupper_a(newWord);
+        fprintf(g,"%d %s\n",(int)strlen(newWord),newWord);
+        newwc++;
+
+        for (j=0;j<strlen(word);j++)
+        {
+            word[j]=toupper(word[j]);
+            fprintf(g,"%d %s\n",(int)strlen(word),word);
+            newwc++;
+            word[j]=tolower(word[j]);
+        }
+        fprintf(g,"%d %s\n",(int)strlen(word),word);
+        newwc++;
+
+    }
+    return newwc;
+
 }
 
 int _build_bruteforce(FILE* g)

@@ -9,7 +9,7 @@
 #include <stdarg.h>
 
 
-#include "prep.h"
+//#include "prep.h"
 
 
 ///SECTION dictionary -----------------------------------------
@@ -76,9 +76,13 @@ int main(int argc, char ** argv)
 {
     //buildDict("dictionary/top250.txt","dictionary_top250.txt",TOP250);
     //buildDict("","dictionary_bruteforce.txt",BRUTEFORCE);
+    //buildDictFromAll("dictionary_all.txt");
+    //buildDict("dictionary_all.txt","dictionary_compounds.txt",COMPOUNDS);
+    //buildDict("dictionary_all.txt","dictionary_mod.txt",MODS);
     //return 0;
 
-    char * filename_shadow = "training-shadow.txt";
+    //char * filename_shadow = "training-shadow.txt";
+    char * filename_shadow = argv[2];
     FILE *f = fopen(filename_shadow,"r");
     ///obtain salt
     char * salt = getSalt(f);
@@ -86,7 +90,7 @@ int main(int argc, char ** argv)
     fclose(f);
 
     ///create the dictionaries
-    int dictcount = 1;
+    int dictcount = 5;
     char *** words = malloc(dictcount * sizeof (char**));
     int *widths = malloc(dictcount*sizeof(int));
     int *wordcounts = malloc (dictcount*sizeof(int));
@@ -95,18 +99,30 @@ int main(int argc, char ** argv)
     ///Password types
     /*
         1. Top 250 stuff   --- 735
-        2. single words
-        3. single word with random capitalization
-        4. single word with random letter replacement
-        5. 2 words stuck together
+        2. single word with or without random capitalization and replacement
+        3. 2 words stuck together
+        4. 8 digits
+        5. bruteforce
         6. words from training and test
     */
     //widths[0]=2;
     //words[0]= get_words("dictionary_top250.txt",&(wordcounts[0]));
 
-    widths[0]=2;
-    words[0] = get_words("dictionary_bruteforce.txt",&(wordcounts[0]));
-    ///TODO for bruteforce, make exception and start from 3 characters
+    widths[0]=1;
+    words[0] = get_words("dictionary_top250.txt",&(wordcounts[0]));
+
+    widths[1]=1;
+    words[1]= get_words("dictionary_mod.txt",&(wordcounts[1]));
+
+    widths[2]=1;
+    words[2]= get_words("dictionary_compounds.txt",&(wordcounts[2]));
+
+    widths[3]=8;
+    words[3]= get_words("dictionary_nums.txt",&(wordcounts[3]));
+
+    widths[4]=6;
+    words[4]=get_words("dictionary_bruteforce.txt",&(wordcounts[4]));
+
 
     ///add usernames and passwords
     int user_count=0;
@@ -199,7 +215,7 @@ void* guess(void* lims_vp)
             user_remove(enc+6,word);
             next_candidate(dict,word);
         }
-        printf_r("Words Attempted using dictionary %d:%ld\n",dict_ind,i);
+        //printf_r("Words Attempted using dictionary %d:%ld\n",dict_ind,i);
     }
 
     return NULL;
@@ -360,7 +376,7 @@ void user_remove(char * hash,char * password)
 
         if (strcmp((*slot)->hash,hash) == 0)
         {
-            fprintf_r(guesses_output_file ,"%s:%s\n",(*slot)->uname,password);
+            printf_r("%s:%s\n",(*slot)->uname,password);
             ///TODO fix memory leak
             //prev = slot;
             *slot = (user*)((*slot)->next_user);
