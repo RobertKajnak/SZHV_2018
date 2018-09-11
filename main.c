@@ -82,7 +82,7 @@ int main(int argc, char ** argv)
     //buildDict("dictionary_all.txt","dictionary_mod.txt",MODS);
     //return 0;
 
-    char * filename_shadow = "training-shadow.txt";
+    char * filename_shadow = "testing-shadow.txt";
     //char * filename_shadow = argv[2];
     FILE *f = fopen(filename_shadow,"r");
     ///obtain salt
@@ -118,7 +118,7 @@ int main(int argc, char ** argv)
     widths[2]=1;
     words[2]= get_words("dictionary_compounds.txt",&(wordcounts[2]));
 
-    widths[3]=8;
+    widths[3]=6;
     words[3]= get_words("dictionary_nums.txt",&(wordcounts[3]));
 
     widths[4]=6;
@@ -127,7 +127,7 @@ int main(int argc, char ** argv)
 
     ///add usernames and passwords
     int user_count=0;
-    users_read("training-shadow.txt",&user_count);
+    users_read(filename_shadow,&user_count);
 
     ///TODO: switch this back to stdout;
     guesses_output_file = fopen("guesses.txt","w");
@@ -420,7 +420,7 @@ char ** get_words(char * file_name,int * wordcount)
 
 void user_insert(user * usr)
 {
-    unsigned long idx= (usr->hash[0]<<24) + (usr->hash[1]<<16)+(usr->hash[2]<<8)+usr->hash[3]+13372;
+    unsigned long idx= (usr->hash[0]<<24) + (usr->hash[1]<<16)+(usr->hash[2]<<8)+usr->hash[3];
     //memccpy(&idx,usr->hash,4,1); /// faster than shifting
     user **slot = &users[idx%cusers];
     if (*slot == NULL) ///calloc used, this should be fine
@@ -439,7 +439,7 @@ void user_insert(user * usr)
 
 void user_remove(char * hash,char * password)
 {
-    unsigned long idx = (hash[0]<<24) + (hash[1]<<16)+(hash[2]<<8)+hash[3]+13372; ///TODO:remove this addition
+    unsigned long idx = (hash[0]<<24) + (hash[1]<<16)+(hash[2]<<8)+hash[3];
     //memccpy(&idx,hash,4,1); /// faster than shifting
     user **slot = &users[idx%cusers];
     //user **prev;
