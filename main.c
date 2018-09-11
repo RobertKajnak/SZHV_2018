@@ -81,8 +81,8 @@ int main(int argc, char ** argv)
     //buildDict("dictionary_all.txt","dictionary_mod.txt",MODS);
     //return 0;
 
-    //char * filename_shadow = "training-shadow.txt";
-    char * filename_shadow = argv[2];
+    char * filename_shadow = "training-shadow.txt";
+    //char * filename_shadow = argv[2];
     FILE *f = fopen(filename_shadow,"r");
     ///obtain salt
     char * salt = getSalt(f);
@@ -376,7 +376,7 @@ void user_remove(char * hash,char * password)
 
         if (strcmp((*slot)->hash,hash) == 0)
         {
-            printf_r("%s:%s\n",(*slot)->uname,password);
+            fprintf_r(guesses_output_file,"%s:%s\n",(*slot)->uname,password);
             ///TODO fix memory leak
             //prev = slot;
             *slot = (user*)((*slot)->next_user);
