@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <stdarg.h>
+#include <ctype.h>
 
 
 //#include "prep.h"
@@ -112,7 +113,7 @@ int main(int argc, char ** argv)
     words[0] = get_words("dictionary_top250.txt",&(wordcounts[0]));
 
     widths[1]=1;
-    words[1]= get_words("dictionary_mod.txt",&(wordcounts[1]));
+    words[1]= get_words("dictionary_all.txt",&(wordcounts[1]));
 
     widths[2]=1;
     words[2]= get_words("dictionary_compounds.txt",&(wordcounts[2]));
@@ -185,6 +186,75 @@ int main(int argc, char ** argv)
     return 0;
 }
 
+
+int nrchars=3;
+char old[] = {'a',  'a', 'u',  'p','t', 'n',     'm', 'e', 'l','c','d', 'o', 'o','e','s','j'};
+char *newc[]={"/\\","4","|_|","|>","7","|\\|","/V\\","[-","|_","<","|)","()","0","&","5","1_"};
+
+void upcase_combi(char * s,int sp,struct crypt_data *data, char *salt)
+{
+    int i;
+    char ns[50];
+    for (i=sp;i<strlen(s);i++)
+    {
+        if (!isalpha(s[i]))
+            continue;
+        strcpy(ns,s);
+        ns[i] = toupper(ns[i]);
+        char *enc = crypt_r(ns, salt, data);
+        user_remove(enc+6,ns);
+        upcase_combi(ns,i+1,data,salt);
+    }
+}
+
+char* replace_char_first(char * source,char old_char, char * new_char)
+{
+    int i,j=0,k;
+    char * newWord = malloc(50);
+    char first =1;
+    for (i=0;i<strlen(source);i++)
+    {
+        if (first && source[i]==old_char)
+        {
+            first =0;
+            for (k=0;k<strlen(new_char);k++)
+            {
+                newWord[j++] = new_char[k];
+            }
+        }
+        else
+        {
+            newWord[j]=source[i];
+            j++;
+        }
+    }
+    newWord[j]='\0';
+    return newWord;
+}
+
+void replace_combi(char *s,struct crypt_data *data, char *salt)
+{
+    int i,j;
+    char *ns;
+    for (i=0;i<strlen(s);i++)
+    {
+        for (j=0;j<nrchars;j++)
+        {
+            if (old[j]==s[i])
+            {
+                ns=replace_char_first(s,old[j],newc[j]);
+
+                char *enc = crypt_r(ns, salt, data);
+                user_remove(enc+6,ns);
+
+                replace_combi(ns,data,salt);
+                free(ns);
+            }
+        }
+    }
+
+}
+
 void* guess(void* lims_vp)
 {
     limits *lims = (limits*)lims_vp;
@@ -209,11 +279,20 @@ void* guess(void* lims_vp)
         long i=0;
         while (word[0]!='\0')
         {
+            if (dict_ind ==1 && strlen(word)<9)
+            {
+                upcase_combi(word,0,&data,lims->salt);
+                replace_combi(word,&data,lims->salt);
+            }
+
+
             i++;
             char *enc = crypt_r(word, lims->salt, &data);
             ///this is the point where I read, that we are guaranteed that the salt length is 2
             user_remove(enc+6,word);
             next_candidate(dict,word);
+
+
         }
         //printf_r("Words Attempted using dictionary %d:%ld\n",dict_ind,i);
     }
@@ -377,6 +456,7 @@ void user_remove(char * hash,char * password)
         if (strcmp((*slot)->hash,hash) == 0)
         {
             fprintf_r(guesses_output_file,"%s:%s\n",(*slot)->uname,password);
+            //printf_r("%s:%s\n",(*slot)->uname,password);
             ///TODO fix memory leak
             //prev = slot;
             *slot = (user*)((*slot)->next_user);
